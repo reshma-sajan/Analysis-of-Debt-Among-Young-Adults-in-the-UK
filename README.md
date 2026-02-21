@@ -39,8 +39,6 @@ Understanding the factors that affect youth debt could contribute to improving f
 
 The debt distribution is heavily right-skewed — most respondents report lower debt levels while a small number carry very large amounts (up to £650,000). The median debt is £3,000, but the mean is £10,601 due to these outliers. Only 3.29% of respondents report zero debt.
 
-![Debt Distribution](images/debt_distribution.png)
-
 This skewness motivated a log transformation of the outcome variable. The comparison below shows how the transformation normalises the distribution:
 
 ![Original vs Log-Transformed Distribution](images/log_comparison.png)
