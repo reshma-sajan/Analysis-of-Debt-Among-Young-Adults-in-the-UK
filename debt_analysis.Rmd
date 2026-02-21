@@ -19,7 +19,7 @@ This analysis examines what factors affect the debt of 25-year-olds using data f
 The original dataset contains 5,792 observations. After removing missing and negative values for the debt variable (W8QDEB2 — amount in £), the sample size was 2,878. The debt distribution is heavily right-skewed, with most respondents reporting lower levels of debt while only a handful of people have large amounts.
 
 ```{r data-loading}
-d <- read.csv("ST447_Data.csv")
+d <- read.csv("data.csv")
 ```
 
 ```{r debt-cleaning}
