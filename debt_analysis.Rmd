@@ -1,56 +1,73 @@
+---
+title: "Determinants of Debt Among Young Adults in the UK"
+---
 
-loading the dataset:
-```{r}
+```{r setup, include=FALSE}
+library(ggplot2)
+library(broom)
+library(dplyr)
+```
+
+## 1. Introduction
+
+This analysis examines what factors affect the debt of 25-year-olds using data from the Next Steps study, an England-based longitudinal project tracking approximately 16,000 young people across eight waves from 2004. During Wave 1, the participants were aged 13/14, and age 25 during Wave 8. The study documented their education, employment, family, and finances. This project employs multiple linear regression to identify different factors across the years that have impacted the debt in Wave 8. Understanding the factors that affect debt could contribute to improving financial education policy for young adults.
+
+## 2. Data and Methods
+
+### 2.1 Data Loading and Cleaning
+
+The original dataset contains 5,792 observations. After removing missing and negative values for the debt variable (W8QDEB2 — amount in £), the sample size was 2,878. The debt distribution is heavily right-skewed, with most respondents reporting lower levels of debt while only a handful of people have large amounts.
+
+```{r data-loading}
 d <- read.csv("ST447_Data.csv")
 ```
 
-Some summary statistics for the debt variable:
-```{r}
+```{r debt-cleaning}
 summary(d$W8QDEB2)
-length(d$W8QDEB2)
 
-# Remove NAs AND filter for non-negative values
+# Remove NAs and filter for non-negative values
 debt <- d$W8QDEB2[!is.na(d$W8QDEB2) & d$W8QDEB2 >= 0]
 summary(debt)
 length(debt)
-hist(debt)
-
 ```
 
-checking invalid values of predictor variables:
-```{r}
+### 2.2 Variable Selection
 
-print('marital status:')
-sum(d$W8DMARSTAT < 0)  
+I chose 7 independent variables for my model:
 
-print('employment:')
-sum(d$W8DACTIVITYC < 0)
+- **W8DMARSTAT** (marital status): influences financial decisions
+- **W8DACTIVITYC** (current activity): affects the likelihood of taking on debt and ability to service debt
+- **W8CMSEX** (gender): analyses gender differences in debt behaviour
+- **W8TENURE** (housing tenure): represents major financial commitments
+- **W1nssecfam** (NS-SEC classification of family, Wave 1): captures patterns of advantage/disadvantage
+- **W1ethgrpYP** (ethnic group, Wave 1): explores cultural differences
+- **W6DebtattYP** (attitude towards debt, Wave 6): examines whether earlier attitudes predict later behaviour
 
-print('gender:')
-sum(d$W8CMSEX < 0)
+All variables except W6DebtattYP have nominal values and were factored and relevelled after filtering values ≥ 0.
 
-print('tenure:')
-sum(d$W8TENURE < 0)
-
-print('annual income:')
-sum(d$W8NETA < 0)
-
-print("ns-sec class:")
-sum(d$W1nssecfam < 0)
-
-print("ethnic group:")
-sum(d$W1ethgrpYP < 0)
-
-print("debt attitude:")
-sum(d$W6DebtattYP < 0)
-
+```{r check-invalid-values}
+invalid_counts <- data.frame(
+  Variable = c("Marital Status", "Employment", "Gender", "Tenure",
+                "NS-SEC Class", "Ethnic Group", "Debt Attitude"),
+  Invalid_Values = c(
+    sum(d$W8DMARSTAT < 0),
+    sum(d$W8DACTIVITYC < 0),
+    sum(d$W8CMSEX < 0),
+    sum(d$W8TENURE < 0),
+    sum(d$W1nssecfam < 0),
+    sum(d$W1ethgrpYP < 0),
+    sum(d$W6DebtattYP < 0)
+  )
+)
+invalid_counts
 ```
-Creating final sample and some analysis:
-```{r}
+
+### 2.3 Creating the Final Sample
+
+```{r create-sample}
 debt_valid <- d[d$W8QDEB2 >= 0, ]
-cat("People with valid debt data:", nrow(debt_valid), "\n")
+n_valid_debt <- nrow(debt_valid)
 
-# Now add all your predictors
 reg_data <- d[d$W8QDEB2 >= 0 & 
               d$W8DMARSTAT >= 0 & 
               d$W8DACTIVITYC >= 0 & 
@@ -58,37 +75,19 @@ reg_data <- d[d$W8QDEB2 >= 0 &
               d$W8TENURE >= 0 &
               d$W1nssecfam >= 0 &
               d$W1ethgrpYP >= 0 &
-              d$W6DebtattYP >= 0,]
+              d$W6DebtattYP >= 0, ]
 
+n_sample <- nrow(reg_data)
 
-cat("Final analysis sample:", nrow(reg_data), "\n")
-cat("From 2,878 debt observations, you'd have:", nrow(reg_data), "\n")
-cat("Percentage of debt sample retained:", 
-    round(nrow(reg_data)/2878*100, 1), "%\n")
+cat("Valid debt observations:", n_valid_debt, "\n")
+cat("Final analysis sample:", n_sample, "\n")
+cat("Percentage retained:", round(n_sample / n_valid_debt * 100, 1), "%\n")
 ```
-Calculating percentages of reference classes in dataset:
-```{r}
-print('single:')
-sum(reg_data$W8DMARSTAT == 1, na.rm=T)/2613 * 100 
 
-print('employed:')
-sum(reg_data$W8DACTIVITYC %in% c(1, 2), na.rm=T)/2613 * 100
+### 2.4 Recoding Variables as Factors
 
-print('male:')
-sum(reg_data$W8CMSEX == 1, na.rm=T)/2613 * 100
-
-print('own - outright:')
-sum(reg_data$W8TENURE == 1, na.rm=T)/2613 * 100
-
-print("higher managerial occupation:")
-sum(reg_data$W1nssecfam == 1)/2613 * 100
-
-print("white:")
-sum(reg_data$W1ethgrpYP == 1)/2613 * 100
-
-```
-Converting current activity data into factors
-```{r}
+```{r factor-employment}
+# Group activity codes into meaningful employment categories (per LSYPE codebook)
 reg_data$employment <- NA
 reg_data$employment[reg_data$W8DACTIVITYC %in% c(1, 2)] <- "Employed"
 reg_data$employment[reg_data$W8DACTIVITYC %in% c(5, 6, 7)] <- "Education/Training"
@@ -98,11 +97,9 @@ reg_data$employment[reg_data$W8DACTIVITYC == 9] <- "Caring"
 
 reg_data$employment <- factor(reg_data$employment)
 reg_data$employment <- relevel(reg_data$employment, ref = "Employed")
-
 ```
 
-Converting gender and housing tenure data into factors
-```{r}
+```{r factor-gender-tenure}
 reg_data$gender <- factor(reg_data$W8CMSEX,
                           levels = c(1, 2),
                           labels = c("Male", "Female"))
@@ -113,79 +110,166 @@ reg_data$tenure[reg_data$W8TENURE == 2] <- "Own - Mort or Loan"
 reg_data$tenure[reg_data$W8TENURE == 3] <- "Part rent/mortgage"
 reg_data$tenure[reg_data$W8TENURE == 4] <- "Rent"
 reg_data$tenure[reg_data$W8TENURE == 5] <- "Rent Free (relatives/friends)"
-reg_data$tenure[reg_data$W8TENURE %in% c(6,7)] <- "other"
-
+reg_data$tenure[reg_data$W8TENURE %in% c(6, 7)] <- "Other"
 
 reg_data$tenure <- factor(reg_data$tenure)
 reg_data$tenure <- relevel(reg_data$tenure, ref = "Own - Outright")
-
 ```
 
-Converting marital status data into factors
-```{r}
-
+```{r factor-marital}
 reg_data$marital <- NA
 reg_data$marital[reg_data$W8DMARSTAT == 1] <- "Single"
 reg_data$marital[reg_data$W8DMARSTAT == 2] <- "Married"
 reg_data$marital[reg_data$W8DMARSTAT == 3] <- "Separated but legally married"
-reg_data$marital[reg_data$W8DMARSTAT %in% c(4,5)] <- "Previously Married"
+reg_data$marital[reg_data$W8DMARSTAT %in% c(4, 5)] <- "Previously Married"
 
 reg_data$marital <- factor(reg_data$marital)
 reg_data$marital <- relevel(reg_data$marital, ref = "Single")
 ```
 
-Converting socioeconomic classifications data into factors
-```{r}
+```{r factor-nssec}
 reg_data$ns_sec <- NA
-reg_data$ns_sec[reg_data$W1nssecfam == 1] <- "higher managerial occ"
-reg_data$ns_sec[reg_data$W1nssecfam == 2] <- "lower managerial occ"
-reg_data$ns_sec[reg_data$W1nssecfam == 3] <- "intermediate occ"
-reg_data$ns_sec[reg_data$W1nssecfam == 4] <- "small employers"
-reg_data$ns_sec[reg_data$W1nssecfam == 5] <- "lower supervisory"
-reg_data$ns_sec[reg_data$W1nssecfam == 6] <- "semi-routine occ"
-reg_data$ns_sec[reg_data$W1nssecfam == 7] <- "routine occ"
-reg_data$ns_sec[reg_data$W1nssecfam == 8] <- "unemployed"
+reg_data$ns_sec[reg_data$W1nssecfam == 1] <- "Higher managerial"
+reg_data$ns_sec[reg_data$W1nssecfam == 2] <- "Lower managerial"
+reg_data$ns_sec[reg_data$W1nssecfam == 3] <- "Intermediate"
+reg_data$ns_sec[reg_data$W1nssecfam == 4] <- "Small employers"
+reg_data$ns_sec[reg_data$W1nssecfam == 5] <- "Lower supervisory"
+reg_data$ns_sec[reg_data$W1nssecfam == 6] <- "Semi-routine"
+reg_data$ns_sec[reg_data$W1nssecfam == 7] <- "Routine"
+reg_data$ns_sec[reg_data$W1nssecfam == 8] <- "Unemployed"
 
 reg_data$ns_sec <- factor(reg_data$ns_sec)
-reg_data$ns_sec <- relevel(reg_data$ns_sec, ref = "higher managerial occ")
-
+reg_data$ns_sec <- relevel(reg_data$ns_sec, ref = "Higher managerial")
 ```
 
-Converting ethnicity data into factors
-```{r}
+```{r factor-ethnicity}
 reg_data$ethnicity <- NA
 reg_data$ethnicity[reg_data$W1ethgrpYP == 1] <- "White"
 reg_data$ethnicity[reg_data$W1ethgrpYP == 2] <- "Mixed"
 reg_data$ethnicity[reg_data$W1ethgrpYP == 3] <- "Indian"
 reg_data$ethnicity[reg_data$W1ethgrpYP == 4] <- "Pakistani"
 reg_data$ethnicity[reg_data$W1ethgrpYP == 5] <- "Bangladeshi"
-reg_data$ethnicity[reg_data$W1ethgrpYP %in% c(6,7)] <- "Black"
+reg_data$ethnicity[reg_data$W1ethgrpYP %in% c(6, 7)] <- "Black"
 reg_data$ethnicity[reg_data$W1ethgrpYP == 8] <- "Other"
 
 reg_data$ethnicity <- factor(reg_data$ethnicity)
 reg_data$ethnicity <- relevel(reg_data$ethnicity, ref = "White")
-
 ```
 
-Linear Regression Model using original debt data
-```{r}
+## 3. Descriptive Statistics
+
+The cleaned dataset has a debt mean of £10,601, and ranges from £0 to £650,000. Only 3.29% of people have zero debt. The sample was 85.3% single, 86.5% employed, 42.4% male, 3% outright homeowners, 16% from higher managerial family backgrounds, and 78.76% white ethnicity.
+
+```{r descriptive-stats}
+summary(reg_data$W8QDEB2)
+cat("Zero debt:", round(sum(reg_data$W8QDEB2 == 0) / n_sample * 100, 2), "%\n")
+```
+
+```{r debt-histogram, fig.width=10, fig.height=4}
+ggplot(reg_data, aes(x = W8QDEB2)) +
+  geom_histogram(bins = 50, fill = "#2c7fb8", color = "white") +
+  labs(title = "Distribution of Debt Among 25-Year-Olds",
+       x = "Total Debt (£)", y = "Count") +
+  theme_minimal()
+```
+
+```{r sample-composition}
+cat("Single:", round(sum(reg_data$marital == "Single", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+cat("Employed:", round(sum(reg_data$employment == "Employed", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+cat("Male:", round(sum(reg_data$gender == "Male", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+cat("Own outright:", round(sum(reg_data$tenure == "Own - Outright", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+cat("Higher managerial:", round(sum(reg_data$ns_sec == "Higher managerial", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+cat("White:", round(sum(reg_data$ethnicity == "White", na.rm = TRUE) / n_sample * 100, 1), "%\n")
+```
+
+## 4. Regression Results
+
+### 4.1 Original Model
+
+The original regression model was statistically significant (F(27, 2585) = 6.85, p < 0.001) but explains only 5.7% of variance (adjusted R² = 0.057). Gender is significant (p = 0.006), with females having less debt than males. Housing tenure is the strongest predictor (p < 0.001), implying that those with mortgages have approximately £14,568 more debt on average than those who outright own their houses. Several NS-SEC class values are also significant, suggesting that children raised in lower occupation households grow to have less debt than their counterparts raised in higher managerial occupation households. Furthermore, current activity and attitude towards debt are significant predictors, revealing that students/trainees and those with more positive attitudes towards debt have higher debt.
+
+```{r regression-original}
 model2 <- lm(W8QDEB2 ~ gender + marital + employment + tenure + ns_sec + ethnicity + W6DebtattYP, data = reg_data)
 summary(model2)
 ```
-Linear regression model using log-transformed debt data
-```{r}
+
+### 4.2 Log-Transformed Model
+
+The log-transformed model is also statistically significant (F(27, 2585) = 5.15, p < 0.001) but explains a lesser 4.1% of variance. Housing tenure is the most significant predictor, revealing that on average those with mortgages have 182% more debt than other homeowners. Attitude towards debt also shows significant results — debt increases with each 1-unit increase in debt attitude. Married adults and those whose families come from small employer classes also appear to have a higher percentage of debt. Current activity and ethnicity significantly predict debt, with the unemployed and sick/disabled having less debt, and ethnically Pakistani people having 58% less debt than ethnically white people.
+
+```{r regression-log}
 reg_data$log_debt <- log(reg_data$W8QDEB2 + 1)
 model3 <- lm(log_debt ~ gender + marital + employment + tenure + ns_sec + ethnicity + W6DebtattYP, data = reg_data)
 summary(model3)
 ```
-Diagnostic Plot for original regression model
-```{r}
-par(mfrow=c(2,2))
-plot(model2)
+
+### 4.3 Model Comparison
+
+```{r model-comparison}
+cat("Original model — Adj. R²:", round(summary(model2)$adj.r.squared, 4), "\n")
+cat("Log model — Adj. R²:", round(summary(model3)$adj.r.squared, 4), "\n")
+cat("Original model AIC:", round(AIC(model2), 1), "\n")
+cat("Log model AIC:", round(AIC(model3), 1), "\n")
 ```
 
-Diagnostic Plot for log-transformed regression model
-```{r}
-par(mfrow=c(2,2))
-plot(model3)
+While the original model has a slightly higher adjusted R², it severely violates normality and homoscedasticity assumptions (see Section 5). The log-transformed model better satisfies regression assumptions despite explaining slightly less variance. Note: AIC values are not directly comparable across different transformations of the dependent variable.
+
+### 4.4 Coefficient Plot
+
+```{r coefficient-plot, fig.width=10, fig.height=8}
+tidy(model3, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(x = estimate, y = reorder(term, estimate))) +
+  geom_point(color = "#2c7fb8", size = 2) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Regression Coefficients (Log-Debt Model)",
+       x = "Estimate", y = "") +
+  theme_minimal()
 ```
+
+## 5. Diagnostics
+
+The original model violated regression assumptions. Diagnostic plots revealed heteroscedasticity and non-normal residuals. The log-transformed model addressed these issues, but it has a lower R² value and interpretation in percentage changes is less intuitive.
+
+```{r diagnostics-original, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2))
+plot(model2, main = "Original Model Diagnostics")
+```
+
+```{r diagnostics-log, fig.width=10, fig.height=8}
+par(mfrow = c(2, 2))
+plot(model3, main = "Log-Transformed Model Diagnostics")
+```
+
+```{r distribution-comparison, fig.width=10, fig.height=4}
+par(mfrow = c(1, 2))
+
+hist(reg_data$W8QDEB2, breaks = 50, col = "#2c7fb8", border = "white",
+     main = "Original Debt", xlab = "Debt (£)")
+
+hist(reg_data$log_debt, breaks = 50, col = "#7fcdbb", border = "white",
+     main = "Log-Transformed Debt", xlab = "log(Debt + 1)")
+
+par(mfrow = c(1, 1))
+```
+
+## 6. Interpretation
+
+Debt among 25-year-olds is overwhelmingly affected by housing tenure. Young homeowners with mortgages carry significantly more debt than those who outright own their homes. This makes sense because at age 25, they are probably at the beginning of their mortgage term, leading to other forms of debt like credit cards or other types of loans.
+
+Current activity also matters, exactly as expected. Results show that students and trainees have higher debts — most likely from student loans — while the unemployed and those unable to work have lesser debt, not from preference, but because lenders restrict credit without a stable income.
+
+The gender finding — females carrying less debt — may reflect the 2015 social context where men were more likely to pursue homeownership independently due to traditional gender roles, though research shows this pattern has shifted in recent years with women having more debt than men.
+
+Family socioeconomic classification is an important and interesting predictor of debt. Children from small employer families (typically parents running businesses) carry 45% more debt, likely reflecting entrepreneurial culture where debt is viewed as a business tool, combined with middle-class aspirations requiring borrowing without full parental wealth to avoid loans. On the other hand, children of lower occupational classes like lower managerial/supervisory and routine/semi-routine occupations have lower debts. This could be because lower family income makes it harder to save for deposits, and banks are less willing to lend money without family guarantors. They are also unlikely to have mortgage debt as they probably rent or live with family/friends.
+
+Culture and marital status also affect debt. Ethnically Pakistani respondents have lesser debt, possibly due to South Asian culture of having greater financial support from family or even different religious principles. Marriage increases debt by 32%, likely because couples take on joint financial commitments like mortgages.
+
+## 7. Limitations
+
+Both models explain minimal variance in debt (adjusted R² of 4–6%). Many factors like education, income, and specific loan types could better explain debt but are unmeasured. Additionally, missing data reduces the accuracy and reliability of the model. The model also does not explain causal relationships between debt and other variables. For example, we cannot determine whether employment causes debt or vice versa.
+
+## 8. Conclusion
+
+Debt among 25-year-olds in the Next Steps study is mainly affected by housing tenure and varies with current activity and their family's socio-economic classifications. Respondents who bought homes with mortgages or loans have significantly higher debt than those who outright own homes. Students have higher debts likely due to student loans, while the unemployed have lesser debts because they don't have access to loans without a stable source of income. The low explanatory power suggests debt is influenced by many unmeasured individual and contextual factors.
