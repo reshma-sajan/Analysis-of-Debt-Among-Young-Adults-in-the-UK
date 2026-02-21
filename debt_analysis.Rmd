@@ -1,0 +1,191 @@
+
+loading the dataset:
+```{r}
+d <- read.csv("ST447_Data.csv")
+```
+
+Some summary statistics for the debt variable:
+```{r}
+summary(d$W8QDEB2)
+length(d$W8QDEB2)
+
+# Remove NAs AND filter for non-negative values
+debt <- d$W8QDEB2[!is.na(d$W8QDEB2) & d$W8QDEB2 >= 0]
+summary(debt)
+length(debt)
+hist(debt)
+
+```
+
+checking invalid values of predictor variables:
+```{r}
+
+print('marital status:')
+sum(d$W8DMARSTAT < 0)  
+
+print('employment:')
+sum(d$W8DACTIVITYC < 0)
+
+print('gender:')
+sum(d$W8CMSEX < 0)
+
+print('tenure:')
+sum(d$W8TENURE < 0)
+
+print('annual income:')
+sum(d$W8NETA < 0)
+
+print("ns-sec class:")
+sum(d$W1nssecfam < 0)
+
+print("ethnic group:")
+sum(d$W1ethgrpYP < 0)
+
+print("debt attitude:")
+sum(d$W6DebtattYP < 0)
+
+```
+Creating final sample and some analysis:
+```{r}
+debt_valid <- d[d$W8QDEB2 >= 0, ]
+cat("People with valid debt data:", nrow(debt_valid), "\n")
+
+# Now add all your predictors
+reg_data <- d[d$W8QDEB2 >= 0 & 
+              d$W8DMARSTAT >= 0 & 
+              d$W8DACTIVITYC >= 0 & 
+              d$W8CMSEX >= 0 & 
+              d$W8TENURE >= 0 &
+              d$W1nssecfam >= 0 &
+              d$W1ethgrpYP >= 0 &
+              d$W6DebtattYP >= 0,]
+
+
+cat("Final analysis sample:", nrow(reg_data), "\n")
+cat("From 2,878 debt observations, you'd have:", nrow(reg_data), "\n")
+cat("Percentage of debt sample retained:", 
+    round(nrow(reg_data)/2878*100, 1), "%\n")
+```
+Calculating percentages of reference classes in dataset:
+```{r}
+print('single:')
+sum(reg_data$W8DMARSTAT == 1, na.rm=T)/2613 * 100 
+
+print('employed:')
+sum(reg_data$W8DACTIVITYC %in% c(1, 2), na.rm=T)/2613 * 100
+
+print('male:')
+sum(reg_data$W8CMSEX == 1, na.rm=T)/2613 * 100
+
+print('own - outright:')
+sum(reg_data$W8TENURE == 1, na.rm=T)/2613 * 100
+
+print("higher managerial occupation:")
+sum(reg_data$W1nssecfam == 1)/2613 * 100
+
+print("white:")
+sum(reg_data$W1ethgrpYP == 1)/2613 * 100
+
+```
+Converting current activity data into factors
+```{r}
+reg_data$employment <- NA
+reg_data$employment[reg_data$W8DACTIVITYC %in% c(1, 2)] <- "Employed"
+reg_data$employment[reg_data$W8DACTIVITYC %in% c(5, 6, 7)] <- "Education/Training"
+reg_data$employment[reg_data$W8DACTIVITYC %in% c(3, 4)] <- "Not working"
+reg_data$employment[reg_data$W8DACTIVITYC == 8] <- "Sick/Disabled"
+reg_data$employment[reg_data$W8DACTIVITYC == 9] <- "Caring"
+
+reg_data$employment <- factor(reg_data$employment)
+reg_data$employment <- relevel(reg_data$employment, ref = "Employed")
+
+```
+
+Converting gender and housing tenure data into factors
+```{r}
+reg_data$gender <- factor(reg_data$W8CMSEX,
+                          levels = c(1, 2),
+                          labels = c("Male", "Female"))
+
+reg_data$tenure <- NA
+reg_data$tenure[reg_data$W8TENURE == 1] <- "Own - Outright"
+reg_data$tenure[reg_data$W8TENURE == 2] <- "Own - Mort or Loan"
+reg_data$tenure[reg_data$W8TENURE == 3] <- "Part rent/mortgage"
+reg_data$tenure[reg_data$W8TENURE == 4] <- "Rent"
+reg_data$tenure[reg_data$W8TENURE == 5] <- "Rent Free (relatives/friends)"
+reg_data$tenure[reg_data$W8TENURE %in% c(6,7)] <- "other"
+
+
+reg_data$tenure <- factor(reg_data$tenure)
+reg_data$tenure <- relevel(reg_data$tenure, ref = "Own - Outright")
+
+```
+
+Converting marital status data into factors
+```{r}
+
+reg_data$marital <- NA
+reg_data$marital[reg_data$W8DMARSTAT == 1] <- "Single"
+reg_data$marital[reg_data$W8DMARSTAT == 2] <- "Married"
+reg_data$marital[reg_data$W8DMARSTAT == 3] <- "Separated but legally married"
+reg_data$marital[reg_data$W8DMARSTAT %in% c(4,5)] <- "Previously Married"
+
+reg_data$marital <- factor(reg_data$marital)
+reg_data$marital <- relevel(reg_data$marital, ref = "Single")
+```
+
+Converting socioeconomic classifications data into factors
+```{r}
+reg_data$ns_sec <- NA
+reg_data$ns_sec[reg_data$W1nssecfam == 1] <- "higher managerial occ"
+reg_data$ns_sec[reg_data$W1nssecfam == 2] <- "lower managerial occ"
+reg_data$ns_sec[reg_data$W1nssecfam == 3] <- "intermediate occ"
+reg_data$ns_sec[reg_data$W1nssecfam == 4] <- "small employers"
+reg_data$ns_sec[reg_data$W1nssecfam == 5] <- "lower supervisory"
+reg_data$ns_sec[reg_data$W1nssecfam == 6] <- "semi-routine occ"
+reg_data$ns_sec[reg_data$W1nssecfam == 7] <- "routine occ"
+reg_data$ns_sec[reg_data$W1nssecfam == 8] <- "unemployed"
+
+reg_data$ns_sec <- factor(reg_data$ns_sec)
+reg_data$ns_sec <- relevel(reg_data$ns_sec, ref = "higher managerial occ")
+
+```
+
+Converting ethnicity data into factors
+```{r}
+reg_data$ethnicity <- NA
+reg_data$ethnicity[reg_data$W1ethgrpYP == 1] <- "White"
+reg_data$ethnicity[reg_data$W1ethgrpYP == 2] <- "Mixed"
+reg_data$ethnicity[reg_data$W1ethgrpYP == 3] <- "Indian"
+reg_data$ethnicity[reg_data$W1ethgrpYP == 4] <- "Pakistani"
+reg_data$ethnicity[reg_data$W1ethgrpYP == 5] <- "Bangladeshi"
+reg_data$ethnicity[reg_data$W1ethgrpYP %in% c(6,7)] <- "Black"
+reg_data$ethnicity[reg_data$W1ethgrpYP == 8] <- "Other"
+
+reg_data$ethnicity <- factor(reg_data$ethnicity)
+reg_data$ethnicity <- relevel(reg_data$ethnicity, ref = "White")
+
+```
+
+Linear Regression Model using original debt data
+```{r}
+model2 <- lm(W8QDEB2 ~ gender + marital + employment + tenure + ns_sec + ethnicity + W6DebtattYP, data = reg_data)
+summary(model2)
+```
+Linear regression model using log-transformed debt data
+```{r}
+reg_data$log_debt <- log(reg_data$W8QDEB2 + 1)
+model3 <- lm(log_debt ~ gender + marital + employment + tenure + ns_sec + ethnicity + W6DebtattYP, data = reg_data)
+summary(model3)
+```
+Diagnostic Plot for original regression model
+```{r}
+par(mfrow=c(2,2))
+plot(model2)
+```
+
+Diagnostic Plot for log-transformed regression model
+```{r}
+par(mfrow=c(2,2))
+plot(model3)
+```
